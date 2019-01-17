@@ -1,11 +1,16 @@
+from __future__ import annotations
+
+from ..utils import index_by_label
 from ..errors import RoffaConfigError
 
 
 class DistrictReference:
-    name = None
-
-    def __init__(self, name):
+    def __init__(self, district, name):
+        self.district = district
         self.name = name
+
+    def get_id(self):
+        return '{}.{}'.format(self.district, self.name)
 
 
 class DistrictNetwork(DistrictReference):
@@ -34,6 +39,76 @@ class District:
         self.networks = {}
         self.containers = {}
         self.volumes = {}
+
+    @staticmethod
+    def diff(config: District, docker: DockerDistrict, docker_api):
+        from . import Container, Network
+        actions = []
+
+        if config is None:
+            config = District()
+
+        if docker is None:
+            docker = DockerDistrict()
+
+        for container in config.containers.keys() | docker.container_index.keys():
+            container_config = config.containers.get(container)
+            current_containers = docker.container_index.get(container, []).copy()
+
+            for docker_cont in current_containers:
+                docker_cont.amount = container_config.amount
+
+            crawl_len = max(container_config.amount, len(current_containers))
+
+            for i in range(0, crawl_len):
+                actions += Container.diff(
+                    container_config if i < container_config.amount else None,
+                    current_containers[i] if i < len(current_containers) else None,
+                    docker_api,
+                    i + 1,
+                )
+
+        for network in config.networks.keys() | docker.networks.keys():
+            network_config = config.networks.get(network)
+            docker_network = docker.networks.get(network)
+            actions += Network.diff(network_config, docker_network, docker_api)
+
+        return actions
+
+    @staticmethod
+    def from_docker(name: str, containers=None, volumes=None, networks=None):
+        from . import DockerContainer, Volume, Network
+        dist = DockerDistrict()
+        dist.name = name
+
+        if containers is None:
+            containers = []
+
+        if volumes is None:
+            volumes = []
+
+        if networks is None:
+            networks = []
+
+        container_idx = index_by_label(containers, 'me.eater.roffa.name')
+
+        network_idx = dict([(network.attrs['Labels']['me.eater.roffa.name'], network) for network in networks if
+                            'me.eater.roffa.name' in network.attrs['Labels']])
+        volume_idx = dict([(volume.attrs['Labels']['me.eater.roffa.name'], volume) for volume in volumes if
+                           'me.eater.roffa.name' in volume.attrs['Labels']])
+
+        for container_name, containers in container_idx.items():
+            dist.container_index[container_name] = [DockerContainer.from_docker(name, container_name, container) for
+                                                    container
+                                                    in containers]
+
+        for network_name, network in network_idx.items():
+            dist.networks[network_name] = Network.from_docker(name, network_name, network)
+
+        for volume_name, volume in volume_idx.items():
+            dist.volumes[volume_name] = Volume.from_docker(name, volume_name, volume)
+
+        return dist
 
     @staticmethod
     def from_config(name: str, config: dict):
@@ -73,6 +148,9 @@ class District:
 
                 dist.containers[volume_name] = Volume.from_config(name, volume_name, volume)
 
+        if name != '__world__':
+            dist.networks['__network__'] = Network.from_config(name, '__network__', {})
+
         if 'networks' in config:
             networks = config['networks']
 
@@ -90,3 +168,12 @@ class District:
                 dist.networks[network_name] = Network.from_config(name, network_name, network)
 
         return dist
+
+
+class DockerDistrict(District):
+    container_index = None
+
+    def __init__(self):
+        super(DockerDistrict, self).__init__()
+        self.networks = {}
+        self.container_index = {}

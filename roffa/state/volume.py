@@ -10,3 +10,10 @@ class Volume:
         net = Volume()
         net.name = name
         return net
+
+    @staticmethod
+    def from_docker(district: str, name: str, volume):
+        net = Volume()
+        net.id = volume.id
+        net.name = name
+        return net
