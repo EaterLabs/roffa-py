@@ -11,14 +11,14 @@ from .base import BaseAction
 from ..utils import get_district_handle, get_handle, get_network_handle, get_district_context
 
 
-class StartContainer(BaseAction):
+class CreateContainer(BaseAction):
     def __init__(self, config: Container, nth):
-        super(StartContainer, self).__init__()
+        super(CreateContainer, self).__init__()
         self.config = config
         self.nth = nth
 
     def log(self):
-        return 'Starting {} {}/{} in {}'.format(
+        return 'Creating {} {}/{} in {}'.format(
             get_handle(self.config),
             self.nth,
             self.config.amount,
@@ -30,6 +30,44 @@ class StartContainer(BaseAction):
 
     def id(self):
         return '{}:{}:{}'.format(self._type, self.config.get_name(), self.nth)
+
+    def get_requirements(self) -> List[str]:
+        reqs = []
+
+        for network in self.config.networks:
+            reqs.append(StartNetwork.get_requirement(network.get_id()))
+
+        for volume in self.config.volumes:
+            reqs.append(StartVolume.get_requirement(volume.get_id()))
+
+        return reqs
+
+
+class StartContainer(BaseAction):
+    def __init__(self, config: Container, idx, nth):
+        super(StartContainer, self).__init__()
+        self.config = config
+        self.container_id = idx
+        self.nth = nth
+
+    def log(self):
+        return 'Starting {} {}/{} in {}'.format(
+            get_handle(self.config),
+            self.nth,
+            self.config.amount,
+            get_district_handle(self.config.district)
+        )
+
+    def run(self, roffa):
+        container = roffa.docker.containers.get(self.container_id)
+
+        if not container:
+            raise RuntimeWarning("Container {} doesn't exist".format(self.container_id))
+
+        container.start()
+
+    def id(self):
+        return '{}:{}:{}:{}'.format(self._type, self.config.get_name(), self.container_id, self.nth)
 
     def get_requirements(self) -> List[str]:
         reqs = []

@@ -1,0 +1,6 @@
+districts:
+  http:
+    containers:
+      web:
+        image: d.xr.to/nginx
+        amount: 2

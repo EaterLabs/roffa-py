@@ -8,4 +8,5 @@ __ALL__ = [
     StartVolume,
     StartContainer,
     ConnectNetwork,
+    CreateContainer
 ]

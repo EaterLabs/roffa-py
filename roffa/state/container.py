@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from ..action import RemoveContainer, StartContainer, ConnectNetwork, DisconnectNetwork
+from ..action import RemoveContainer, StartContainer, ConnectNetwork, DisconnectNetwork, CreateContainer
 
 from ..errors import RoffaConfigError
 
@@ -53,8 +53,11 @@ class Container:
             return actions
 
         if docker is None:
-            actions.append(StartContainer(config, nth))
+            actions.append(CreateContainer(config, nth))
             return
+
+        if not docker.is_running():
+            actions.append(StartContainer(config, docker.get_id(), nth))
 
         networks = docker.container.attrs['NetworkSettings']['Networks']
         needed_networks = set(map(lambda net: net.get_id(), config.networks))
@@ -157,6 +160,9 @@ class DockerContainer(Container):
 
     def get_id(self):
         return self.container.id
+
+    def is_running(self):
+        return self.container.status == 'running'
 
     @staticmethod
     def from_docker(district: str, name: str, container):

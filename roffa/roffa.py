@@ -1,17 +1,24 @@
 from __future__ import annotations
+
+from time import sleep
 from typing import List, Iterator
 
 from docker import from_env, DockerClient
+from yaml import load
 
 from .action import BaseAction
 from .utils import index_by_label
 from .state import District, DockerDistrict
 from .errors import RoffaConfigError
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class ActionList:
-    def __init__(self, list: List[str] = None):
-        self.list = [] if list is None else list
+    def __init__(self, _list: List[str] = None):
+        self.list = [] if _list is None else _list
 
     def append(self, action: str):
         if action in self.list:
@@ -67,10 +74,20 @@ class ActionChain:
 
 
 class Roffa:
-    config = None
-    docker = None
-    current_state = None
-    actions = None
+    @staticmethod
+    def from_args(**kwargs):
+        roffa = Roffa()
+        roffa.once = kwargs['once']
+        roffa.wait = kwargs['interval']
+
+        try:
+            logger.debug('Loading config from {}'.format(kwargs['config'].name))
+            roffa.load_config(load(kwargs['config']))
+        except RuntimeError as e:
+            logger.warning('Failed loading config {} with error: {}'.format(kwargs['config'], e))
+            return None
+
+        return roffa
 
     def __init__(self, docker: DockerClient = None):
         if docker is None:
@@ -78,28 +95,48 @@ class Roffa:
 
         self.docker = docker
         self.actions = ActionChain()
+        self.once = False
+        self.config = None
+        self.actions = None
+        self.current_state = None
+        self.wait = 60
 
     def load_config(self, config: dict):
         self.config = RoffaConfig.from_config(config)
 
     def collect_state(self):
+        logger.debug('Collecting current docker state')
         self.current_state = RoffaConfig.from_docker(self.docker)
 
     def collect_actions(self):
+        logger.debug('Creating actions against docker state')
         action_list = ActionChain()
         action_list.append(RoffaConfig.diff(self.config, self.current_state, self.docker))
         self.actions = action_list
+        logger.debug('Created {} actions'.format(len(self.actions.actions)))
 
     def run_actions(self):
+        logger.debug('Running actions')
         actions = self.actions.get_sorted()
 
         for action in actions:
             item = action.log()
 
             if item is not None:
-                print(item)
+                logger.info(item)
 
             action.run(self)
+
+    def run(self):
+        while True:
+            self.collect_state()
+            self.collect_actions()
+            self.run_actions()
+
+            if self.once:
+                break
+
+            sleep(self.wait)
 
 
 class RoffaConfig:
@@ -200,5 +237,5 @@ class RoffaConfig:
 
 class RoffaDockerConfig(RoffaConfig):
     def __init__(self):
-        super().__init__()
+        super(RoffaDockerConfig, self).__init__()
         self.world = DockerDistrict.from_docker('__world__')
