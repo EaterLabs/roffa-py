@@ -10,16 +10,19 @@ logger = logging.getLogger('roffa')
 REGEX_DURATION = re.compile(r"^\s*(?:(?P<hours>\d+)h)?\s*(?:(?P<minutes>\d+)m)?\s*(?:(?P<seconds>\d+)s)?\s*$")
 
 verbose_parsed = False
+current_level = logging.FATAL
 
 
 def set_verbose(_, __, value):
-    global verbose_parsed
-    if verbose_parsed:
-        return
+    global current_level
+
+    loglevel = logging.INFO
 
     if value:
-        verbose_parsed = True
         loglevel = logging.DEBUG
+
+    if current_level > loglevel:
+        current_level = loglevel
         logging.basicConfig(level=loglevel)
 
 
@@ -66,6 +69,7 @@ def cli():
 @click.option('--once', '-1', is_flag=True, help="Enforce state once and exit")
 @click.option('--config', '-c', default="/etc/roffa/main.yml", type=click.File('rb'), help="Location of roffa config",
               show_default=True)
+@click.option('--dry-run', '--dryrun', '--noop', '-n', 'dryrun', is_flag=True, help="Run in dry-run or no-op mode")
 @verbose()
 def daemon(**kwargs):
     roffa_inst = roffa.Roffa.from_args(**kwargs)

@@ -79,6 +79,7 @@ class Roffa:
         roffa = Roffa()
         roffa.once = kwargs['once']
         roffa.wait = kwargs['interval']
+        roffa.dry_run = kwargs['dryrun']
 
         try:
             logger.debug('Loading config from {}'.format(kwargs['config'].name))
@@ -100,6 +101,7 @@ class Roffa:
         self.actions = None
         self.current_state = None
         self.wait = 60
+        self.dry_run = False
 
     def load_config(self, config: dict):
         self.config = RoffaConfig.from_config(config)
@@ -123,9 +125,10 @@ class Roffa:
             item = action.log()
 
             if item is not None:
-                logger.info(item)
+                logger.info('[{}] {}'.format('RUN' if not self.dry_run else 'NOP', item))
 
-            action.run(self)
+            if not self.dry_run:
+                action.run(self)
 
     def run(self):
         while True:
@@ -133,7 +136,7 @@ class Roffa:
             self.collect_actions()
             self.run_actions()
 
-            if self.once:
+            if self.once or self.dry_run:
                 break
 
             sleep(self.wait)
