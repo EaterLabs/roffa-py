@@ -115,7 +115,7 @@ class Roffa:
         action_list = ActionChain()
         action_list.append(RoffaConfig.diff(self.config, self.current_state, self.docker))
         self.actions = action_list
-        logger.debug('Created {} actions'.format(len(self.actions.actions)))
+        logger.info('Created {} actions'.format(len(self.actions.actions)))
 
     def run_actions(self):
         logger.debug('Running actions')
@@ -129,6 +129,8 @@ class Roffa:
 
             if not self.dry_run:
                 action.run(self)
+
+        logger.info('Executed all actions')
 
     def run(self):
         while True:
